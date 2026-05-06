@@ -1,0 +1,14 @@
+{
+  "name": "portfolio-web",
+  "version": "1.0.0",
+  "description": "Studio VZN Portfolio Website",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}
