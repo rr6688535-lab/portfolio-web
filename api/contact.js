@@ -1,12 +1,21 @@
 const nodemailer = require('nodemailer');
 
 module.exports = async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ ok: false, error: 'Method not allowed.' });
   }
 
   try {
+    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
     const {
       contactIntent = '',
       name = '',
@@ -15,7 +24,7 @@ module.exports = async (req, res) => {
       contactPreference = '',
       email = '',
       message = ''
-    } = req.body || {};
+    } = body;
 
     if (!name || !email || !message) {
       return res.status(400).json({ ok: false, error: 'Missing required fields.' });
@@ -61,6 +70,10 @@ module.exports = async (req, res) => {
 
     return res.status(200).json({ ok: true });
   } catch (error) {
-    return res.status(500).json({ ok: false, error: 'Email delivery failed.' });
+    return res.status(500).json({
+      ok: false,
+      error: 'Email delivery failed.',
+      detail: error && error.message ? error.message : 'Unknown transport error.'
+    });
   }
 };
