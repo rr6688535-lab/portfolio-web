@@ -149,17 +149,19 @@ export default function HomePage() {
           ...contactForm
         })
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       // Backend returns { ok: true } on successful email delivery.
       if (!response.ok || !data.ok) {
-        throw new Error(data.error || 'Failed to submit contact request.');
+        const detail = data.detail ? ` (${data.detail})` : '';
+        const missing = Array.isArray(data.missing) && data.missing.length ? ` Missing: ${data.missing.join(', ')}` : '';
+        throw new Error((data.error || 'Failed to submit contact request.') + detail + missing);
       }
       setIsContactOpen(false);
       setIsRequestSubmitted(true);
       // Reset form only after successful submission.
       setContactForm({ name: '', contact: '', service: '', contactPreference: 'call', email: '', message: '' });
-    } catch (_error) {
-      window.alert('Your request could not be sent right now. Please try again.');
+    } catch (error) {
+      window.alert(error?.message || 'Your request could not be sent right now. Please try again.');
     } finally {
       setIsSubmittingContact(false);
     }
