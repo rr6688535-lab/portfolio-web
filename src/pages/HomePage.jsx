@@ -137,28 +137,38 @@ export default function HomePage() {
 
   const handleContactSubmit = async (event) => {
     event.preventDefault();
-    // Prevent duplicate submissions while request is in flight.
     setIsSubmittingContact(true);
     try {
-      // Send all form fields + selected intent to backend mail endpoint.
-      const response = await fetch('/api/contact', {
+      const accessKey = import.meta.env.VITE_WEB3FORMS_ACCESS_KEY;
+      if (!accessKey) {
+        throw new Error('Form service is not configured.');
+      }
+
+      const payload = {
+        access_key: accessKey,
+        subject: New Portfolio Lead: ,
+        from_name: 'Essenziat Digital Website',
+        contactIntent,
+        name: contactForm.name,
+        contact: contactForm.contact,
+        service: contactForm.service,
+        contactPreference: contactForm.contactPreference,
+        email: contactForm.email,
+        message: contactForm.message || 'No detailed message provided. User requested direct call/text follow-up.'
+      };
+
+      const response = await fetch('https://api.web3forms.com/submit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contactIntent,
-          ...contactForm
-        })
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(payload)
       });
       const data = await response.json().catch(() => ({}));
-      // Backend returns { ok: true } on successful email delivery.
-      if (!response.ok || !data.ok) {
-        const detail = data.detail ? ` (${data.detail})` : '';
-        const missing = Array.isArray(data.missing) && data.missing.length ? ` Missing: ${data.missing.join(', ')}` : '';
-        throw new Error((data.error || 'Failed to submit contact request.') + detail + missing);
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Failed to submit contact request.');
       }
+
       setIsContactOpen(false);
       setIsRequestSubmitted(true);
-      // Reset form only after successful submission.
       setContactForm({ name: '', contact: '', service: '', contactPreference: 'call', email: '', message: '' });
     } catch (error) {
       window.alert(error?.message || 'Your request could not be sent right now. Please try again.');
@@ -219,6 +229,7 @@ export default function HomePage() {
     </main>
   );
 }
+
 
 
 
