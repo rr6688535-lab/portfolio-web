@@ -15,7 +15,31 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    let body = req.body || {};
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body || '{}');
+      } catch (_err) {
+        body = {};
+      }
+    }
+
+    // Fallback for runtimes where req.body is empty despite POST JSON.
+    if (!body || Object.keys(body).length === 0) {
+      const chunks = [];
+      for await (const chunk of req) {
+        chunks.push(Buffer.from(chunk));
+      }
+      const raw = Buffer.concat(chunks).toString('utf8');
+      if (raw) {
+        try {
+          body = JSON.parse(raw);
+        } catch (_err) {
+          body = {};
+        }
+      }
+    }
+
     const {
       contactIntent = '',
       name = '',
@@ -26,8 +50,12 @@ module.exports = async (req, res) => {
       message = ''
     } = body;
 
-    if (!name || !email || !message) {
-      return res.status(400).json({ ok: false, error: 'Missing required fields.' });
+    const missing = [];
+    if (!name) missing.push('name');
+    if (!email) missing.push('email');
+    if (!message) missing.push('message');
+    if (missing.length) {
+      return res.status(400).json({ ok: false, error: 'Missing required fields.', missing });
     }
 
     const SMTP_HOST = process.env.SMTP_HOST;
