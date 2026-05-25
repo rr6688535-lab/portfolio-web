@@ -146,7 +146,7 @@ export default function HomePage() {
 
       const payload = {
         access_key: accessKey,
-        subject: New Portfolio Lead: ,
+        subject: `New Portfolio Lead: ${contactForm.service || 'General Inquiry'}`,
         from_name: 'Essenziat Digital Website',
         contactIntent,
         name: contactForm.name,
