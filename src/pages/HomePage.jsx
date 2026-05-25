@@ -43,6 +43,9 @@ const trustStats = {
 };
 
 const clientLogos = ['RUHVERSE', 'TABSARAH TABLE', 'VF EDUCATION', 'DIGITAL BRANDS'];
+const RATING_LOCK_KEY = 'essenziat_rating_submitted';
+const CONTACT_SUBMIT_AT_KEY = 'essenziat_contact_submit_at';
+const CONTACT_COOLDOWN_MS = 60 * 1000;
 
 
 export default function HomePage() {
@@ -114,6 +117,11 @@ export default function HomePage() {
   const isPreviewEnabled = projects[activeProject].title === 'The Tabsarah Table' || projects[activeProject].title === 'VF Educational Channel';
   const handleRateService = async (value) => {
     if (isSubmittingRating) return;
+    const alreadyRated = localStorage.getItem(RATING_LOCK_KEY) === '1';
+    if (alreadyRated) {
+      window.alert('You can submit rating only once from this browser.');
+      return;
+    }
     setIsSubmittingRating(true);
     try {
       const response = await fetch('/api/ratings/', {
@@ -128,6 +136,7 @@ export default function HomePage() {
       if (data.summary) {
         setRatingSummary(data.summary);
       }
+      localStorage.setItem(RATING_LOCK_KEY, '1');
     } catch (_error) {
       window.alert('Rating could not be submitted right now. Please try again.');
     } finally {
@@ -137,6 +146,14 @@ export default function HomePage() {
 
   const handleContactSubmit = async (event) => {
     event.preventDefault();
+    const now = Date.now();
+    const lastSubmitAt = Number(localStorage.getItem(CONTACT_SUBMIT_AT_KEY) || '0');
+    if (lastSubmitAt && now - lastSubmitAt < CONTACT_COOLDOWN_MS) {
+      const secondsLeft = Math.ceil((CONTACT_COOLDOWN_MS - (now - lastSubmitAt)) / 1000);
+      window.alert(`Please wait ${secondsLeft}s before submitting again.`);
+      return;
+    }
+
     setIsSubmittingContact(true);
     try {
       const accessKey = import.meta.env.VITE_WEB3FORMS_ACCESS_KEY;
@@ -154,7 +171,8 @@ export default function HomePage() {
         service: contactForm.service,
         contactPreference: contactForm.contactPreference,
         email: contactForm.email,
-        message: contactForm.message || 'No detailed message provided. User requested direct call/text follow-up.'
+        message: contactForm.message || 'No detailed message provided. User requested direct call/text follow-up.',
+        botcheck: ''
       };
 
       const response = await fetch('https://api.web3forms.com/submit', {
@@ -167,6 +185,7 @@ export default function HomePage() {
         throw new Error(data.message || 'Failed to submit contact request.');
       }
 
+      localStorage.setItem(CONTACT_SUBMIT_AT_KEY, String(now));
       setIsContactOpen(false);
       setIsRequestSubmitted(true);
       setContactForm({ name: '', contact: '', service: '', contactPreference: 'call', email: '', message: '' });
