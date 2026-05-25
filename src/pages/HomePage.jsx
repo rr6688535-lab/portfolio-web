@@ -44,14 +44,6 @@ const trustStats = {
 
 const clientLogos = ['RUHVERSE', 'TABSARAH TABLE', 'VF EDUCATION', 'DIGITAL BRANDS'];
 
-const getCookie = (name) => {
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) {
-    return parts.pop().split(';').shift();
-  }
-  return '';
-};
 
 export default function HomePage() {
   const heroRef = useRef(null);
@@ -98,7 +90,6 @@ export default function HomePage() {
   useEffect(() => {
     const loadRatings = async () => {
       try {
-        await fetch('/api/csrf/', { credentials: 'include' });
         const response = await fetch('/api/ratings/');
         const data = await response.json();
         if (response.ok && data.ok && data.summary) {
@@ -125,11 +116,9 @@ export default function HomePage() {
     if (isSubmittingRating) return;
     setIsSubmittingRating(true);
     try {
-      const csrfToken = getCookie('csrftoken');
       const response = await fetch('/api/ratings/', {
         method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value })
       });
       const data = await response.json();
@@ -151,12 +140,10 @@ export default function HomePage() {
     // Prevent duplicate submissions while request is in flight.
     setIsSubmittingContact(true);
     try {
-      const csrfToken = getCookie('csrftoken');
       // Send all form fields + selected intent to backend mail endpoint.
-      const response = await fetch('/api/contact/', {
+      const response = await fetch('/api/contact', {
         method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contactIntent,
           ...contactForm
@@ -230,5 +217,6 @@ export default function HomePage() {
     </main>
   );
 }
+
 
 
