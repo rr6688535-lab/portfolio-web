@@ -52,8 +52,13 @@ module.exports = async (req, res) => {
 
     const missing = [];
     if (!name) missing.push('name');
-    if (!email) missing.push('email');
-    if (!message) missing.push('message');
+    if (contactIntent === 'request-call') {
+      if (!contact) missing.push('contact');
+      if (!service) missing.push('service');
+    } else {
+      if (!email) missing.push('email');
+      if (!message) missing.push('message');
+    }
     if (missing.length) {
       return res.status(400).json({ ok: false, error: 'Missing required fields.', missing });
     }
@@ -80,18 +85,18 @@ module.exports = async (req, res) => {
       `Intent: ${contactIntent || 'N/A'}`,
       `Name: ${name}`,
       `Contact: ${contact || 'N/A'}`,
-      `Email: ${email}`,
+      `Email: ${email || 'N/A'}`,
       `Service: ${service || 'N/A'}`,
       `Contact Preference: ${contactPreference || 'N/A'}`,
       '',
       'Message:',
-      message
+      message || 'No detailed message provided. User requested direct call/text follow-up.'
     ].join('\n');
 
     await transporter.sendMail({
       from: `Portfolio Lead <${SMTP_USER}>`,
       to: CONTACT_RECEIVER_EMAIL,
-      replyTo: email,
+      replyTo: email || SMTP_USER,
       subject,
       text
     });
