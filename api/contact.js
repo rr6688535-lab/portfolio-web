@@ -63,11 +63,11 @@ module.exports = async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Missing required fields.', missing });
     }
 
-    const SMTP_HOST = process.env.SMTP_HOST;
-    const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
-    const SMTP_USER = process.env.SMTP_USER;
-    const SMTP_PASS = process.env.SMTP_PASS;
-    const CONTACT_RECEIVER_EMAIL = process.env.CONTACT_RECEIVER_EMAIL || SMTP_USER;
+    const SMTP_HOST = process.env.SMTP_HOST || process.env.EMAIL_HOST;
+    const SMTP_PORT = Number(process.env.SMTP_PORT || process.env.EMAIL_PORT || 587);
+    const SMTP_USER = process.env.SMTP_USER || process.env.EMAIL_HOST_USER || process.env.EMAIL_USER;
+    const SMTP_PASS = process.env.SMTP_PASS || process.env.EMAIL_HOST_PASSWORD || process.env.EMAIL_PASS;
+    const CONTACT_RECEIVER_EMAIL = process.env.CONTACT_RECEIVER_EMAIL || process.env.DEFAULT_FROM_EMAIL || SMTP_USER;
 
     if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS || !CONTACT_RECEIVER_EMAIL) {
       return res.status(500).json({ ok: false, error: 'Mail transport is not configured.' });
