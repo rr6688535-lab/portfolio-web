@@ -12,6 +12,7 @@ import TestimonialsSection from '../components/TestimonialsSection';
 import FAQSection from '../components/FAQSection';
 import FinalCTASection from '../components/FinalCTASection';
 import SiteHeader from '../components/SiteHeader';
+import { supabase } from '../lib/supabase';
 
 const services = [
   { n: '01', icon: 'web', title: 'Website Design', text: 'Custom, high-conversion landing pages and complex digital platforms built for impact.' },
@@ -44,8 +45,22 @@ const trustStats = {
 
 const clientLogos = ['RUHVERSE', 'TABSARAH TABLE', 'VF EDUCATION', 'DIGITAL BRANDS'];
 const RATING_LOCK_KEY = 'essenziat_rating_submitted';
+const RATING_DEVICE_ID_KEY = 'essenziat_rating_device_id';
 const CONTACT_SUBMIT_AT_KEY = 'essenziat_contact_submit_at';
 const CONTACT_COOLDOWN_MS = 60 * 1000;
+const BASELINE_RATING_AVG = 4.7;
+const BASELINE_RATING_COUNT = 7;
+
+const getOrCreateDeviceId = () => {
+  const existing = localStorage.getItem(RATING_DEVICE_ID_KEY);
+  if (existing) return existing;
+  const generated =
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `dev_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  localStorage.setItem(RATING_DEVICE_ID_KEY, generated);
+  return generated;
+};
 
 
 export default function HomePage() {
@@ -92,14 +107,33 @@ export default function HomePage() {
   // Load persisted rating summary from backend on first render.
   useEffect(() => {
     const loadRatings = async () => {
+      if (!supabase) return;
       try {
-        const response = await fetch('/api/ratings/');
-        const data = await response.json();
-        if (response.ok && data.ok && data.summary) {
-          setRatingSummary(data.summary);
+        const { data, error } = await supabase.from('rating_votes').select('value');
+        if (error) throw error;
+        const votes = data || [];
+        const dbCount = votes.length;
+        const dbSum = votes.reduce((sum, row) => sum + Number(row.value || 0), 0);
+        const totalCount = BASELINE_RATING_COUNT + dbCount;
+        const totalSum = BASELINE_RATING_AVG * BASELINE_RATING_COUNT + dbSum;
+        const avg = totalCount > 0 ? (totalSum / totalCount).toFixed(1) : '0.0';
+        setRatingSummary({ average: avg, count: totalCount });
+      } catch (_error) {
+        setRatingSummary({ average: BASELINE_RATING_AVG.toFixed(1), count: BASELINE_RATING_COUNT });
+      }
+
+      try {
+        const deviceId = getOrCreateDeviceId();
+        const { data: existing, error: existingErr } = await supabase
+          .from('rating_votes')
+          .select('id')
+          .eq('device_id', deviceId)
+          .limit(1);
+        if (!existingErr && existing && existing.length > 0) {
+          localStorage.setItem(RATING_LOCK_KEY, '1');
         }
       } catch (_error) {
-        // Keep default summary if backend is temporarily unavailable.
+        // Ignore lock sync errors and keep local check as fallback.
       }
     };
     loadRatings();
@@ -117,6 +151,10 @@ export default function HomePage() {
   const isPreviewEnabled = projects[activeProject].title === 'The Tabsarah Table' || projects[activeProject].title === 'VF Educational Channel';
   const handleRateService = async (value) => {
     if (isSubmittingRating) return;
+    if (!supabase) {
+      window.alert('Rating service is not configured.');
+      return;
+    }
     const alreadyRated = localStorage.getItem(RATING_LOCK_KEY) === '1';
     if (alreadyRated) {
       window.alert('You can submit rating only once from this browser.');
@@ -124,19 +162,26 @@ export default function HomePage() {
     }
     setIsSubmittingRating(true);
     try {
-      const response = await fetch('/api/ratings/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value })
-      });
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
-        throw new Error(data.error || 'Failed to submit rating.');
-      }
-      if (data.summary) {
-        setRatingSummary(data.summary);
+      const deviceId = getOrCreateDeviceId();
+      const { error } = await supabase.from('rating_votes').insert([{ device_id: deviceId, value }]);
+      if (error) {
+        if (error.code === '23505') {
+          localStorage.setItem(RATING_LOCK_KEY, '1');
+          throw new Error('You can submit rating only once from this browser.');
+        }
+        throw error;
       }
       localStorage.setItem(RATING_LOCK_KEY, '1');
+
+      const { data: allVotes, error: summaryErr } = await supabase.from('rating_votes').select('value');
+      if (!summaryErr) {
+        const dbCount = (allVotes || []).length;
+        const dbSum = (allVotes || []).reduce((sum, row) => sum + Number(row.value || 0), 0);
+        const totalCount = BASELINE_RATING_COUNT + dbCount;
+        const totalSum = BASELINE_RATING_AVG * BASELINE_RATING_COUNT + dbSum;
+        const avg = totalCount > 0 ? (totalSum / totalCount).toFixed(1) : '0.0';
+        setRatingSummary({ average: avg, count: totalCount });
+      }
     } catch (_error) {
       window.alert('Rating could not be submitted right now. Please try again.');
     } finally {
