@@ -1,5 +1,3 @@
-const nodemailer = require('nodemailer');
-
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
@@ -24,7 +22,6 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Fallback for runtimes where req.body is empty despite POST JSON.
     if (!body || Object.keys(body).length === 0) {
       const chunks = [];
       for await (const chunk of req) {
@@ -63,22 +60,13 @@ module.exports = async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Missing required fields.', missing });
     }
 
-    const SMTP_HOST = process.env.SMTP_HOST || process.env.EMAIL_HOST;
-    const SMTP_PORT = Number(process.env.SMTP_PORT || process.env.EMAIL_PORT || 587);
-    const SMTP_USER = process.env.SMTP_USER || process.env.EMAIL_HOST_USER || process.env.EMAIL_USER;
-    const SMTP_PASS = process.env.SMTP_PASS || process.env.EMAIL_HOST_PASSWORD || process.env.EMAIL_PASS;
-    const CONTACT_RECEIVER_EMAIL = process.env.CONTACT_RECEIVER_EMAIL || process.env.DEFAULT_FROM_EMAIL || SMTP_USER;
+    const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+    const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || '';
+    const CONTACT_RECEIVER_EMAIL = process.env.CONTACT_RECEIVER_EMAIL || '';
 
-    if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS || !CONTACT_RECEIVER_EMAIL) {
-      return res.status(500).json({ ok: false, error: 'Mail transport is not configured.' });
+    if (!RESEND_API_KEY || !RESEND_FROM_EMAIL || !CONTACT_RECEIVER_EMAIL) {
+      return res.status(500).json({ ok: false, error: 'Resend transport is not configured.' });
     }
-
-    const transporter = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_PORT === 465,
-      auth: { user: SMTP_USER, pass: SMTP_PASS }
-    });
 
     const subject = `New Portfolio Lead: ${service || 'General Inquiry'}`;
     const text = [
@@ -93,13 +81,39 @@ module.exports = async (req, res) => {
       message || 'No detailed message provided. User requested direct call/text follow-up.'
     ].join('\n');
 
-    await transporter.sendMail({
-      from: `Portfolio Lead <${SMTP_USER}>`,
-      to: CONTACT_RECEIVER_EMAIL,
-      replyTo: email || SMTP_USER,
-      subject,
-      text
+    const html = `
+      <h2>New Portfolio Lead</h2>
+      <p><strong>Intent:</strong> ${contactIntent || 'N/A'}</p>
+      <p><strong>Name:</strong> ${name}</p>
+      <p><strong>Contact:</strong> ${contact || 'N/A'}</p>
+      <p><strong>Email:</strong> ${email || 'N/A'}</p>
+      <p><strong>Service:</strong> ${service || 'N/A'}</p>
+      <p><strong>Contact Preference:</strong> ${contactPreference || 'N/A'}</p>
+      <p><strong>Message:</strong></p>
+      <p>${(message || 'No detailed message provided. User requested direct call/text follow-up.').replace(/\n/g, '<br/>')}</p>
+    `;
+
+    const resendResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: RESEND_FROM_EMAIL,
+        to: [CONTACT_RECEIVER_EMAIL],
+        subject,
+        text,
+        html,
+        reply_to: email || undefined
+      })
     });
+
+    const resendData = await resendResponse.json().catch(() => ({}));
+    if (!resendResponse.ok) {
+      const msg = resendData?.message || 'Resend API rejected the request.';
+      return res.status(500).json({ ok: false, error: 'Email delivery failed.', detail: msg });
+    }
 
     return res.status(200).json({ ok: true });
   } catch (error) {
