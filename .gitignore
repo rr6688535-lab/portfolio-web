@@ -17,3 +17,5 @@ backend/.venv/
 backend/db.sqlite3
 
 .DESIGN.md
+.env.production
+.env.developement

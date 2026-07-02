@@ -13,6 +13,7 @@ import FAQSection from '../components/FAQSection';
 import FinalCTASection from '../components/FinalCTASection';
 import SiteHeader from '../components/SiteHeader';
 import { supabase } from '../lib/supabase';
+import { getRatings, submitRating } from "../API/rating";
 
 const services = [
   { n: '01', icon: 'web', title: 'Website Design', text: 'Custom, high-conversion landing pages and complex digital platforms built for impact.' },
@@ -92,24 +93,19 @@ export default function HomePage() {
   }, [activeProject, isFullscreenPreviewOpen]);
 
   // Load persisted rating summary from backend on first render.
-  useEffect(() => {
-    const loadRatings = async () => {
-      if (!supabase) return;
-      try {
-        const { data, error } = await supabase.from('rating_votes').select('value');
-        if (error) throw error;
-        const votes = data || [];
-        const dbCount = votes.length;
-        const dbSum = votes.reduce((sum, row) => sum + Number(row.value || 0), 0);
-        const totalCount = BASELINE_RATING_COUNT + dbCount;
-        const totalSum = BASELINE_RATING_AVG * BASELINE_RATING_COUNT + dbSum;
-        const avg = totalCount > 0 ? (totalSum / totalCount).toFixed(1) : '0.0';
-        setRatingSummary({ average: avg, count: totalCount });
-      } catch (_error) {
-        setRatingSummary({ average: BASELINE_RATING_AVG.toFixed(1), count: BASELINE_RATING_COUNT });
-      }
+  const loadRatings = async () => {
+    try {
+      const data = await getRatings();
 
-    };
+      if (data.ok) {
+        setRatingSummary(data.summary);
+      }
+    } catch (error) {
+      console.error("Failed to load ratings:", error);
+    }
+  };
+
+  useEffect(() => {
     loadRatings();
   }, []);
 
@@ -125,38 +121,21 @@ export default function HomePage() {
   const isPreviewEnabled = projects[activeProject].title === 'The Tabsarah Table' || projects[activeProject].title === 'VF Educational Channel';
   const handleRateService = async (value) => {
     if (isSubmittingRating) return;
-    if (!supabase) {
-      window.alert('Rating service is not configured.');
-      return;
-    }
-    const emailInput = window.prompt('Enter your email to submit rating (one rating per email):', '');
-    const email = (emailInput || '').trim().toLowerCase();
-    const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    if (!isEmailValid) {
-      window.alert('Please enter a valid email address.');
-      return;
-    }
-    setIsSubmittingRating(true);
-    try {
-      const { error } = await supabase.from('rating_votes').insert([{ email, value }]);
-      if (error) {
-        if (error.code === '23505') {
-          throw new Error('Rating already submitted for this email.');
-        }
-        throw error;
-      }
 
-      const { data: allVotes, error: summaryErr } = await supabase.from('rating_votes').select('value');
-      if (!summaryErr) {
-        const dbCount = (allVotes || []).length;
-        const dbSum = (allVotes || []).reduce((sum, row) => sum + Number(row.value || 0), 0);
-        const totalCount = BASELINE_RATING_COUNT + dbCount;
-        const totalSum = BASELINE_RATING_AVG * BASELINE_RATING_COUNT + dbSum;
-        const avg = totalCount > 0 ? (totalSum / totalCount).toFixed(1) : '0.0';
-        setRatingSummary({ average: avg, count: totalCount });
+    try {
+      setIsSubmittingRating(true);
+
+      const data = await submitRating(value);
+
+      if (data.ok) {
+        setRatingSummary(data.summary);
+        window.alert("⭐ Thank you for your rating!");
+      } else {
+        window.alert(data.error || "Unable to submit rating.");
       }
     } catch (error) {
-      window.alert(error?.message || 'Rating could not be submitted right now. Please try again.');
+      console.error("Rating submission failed:", error);
+      window.alert("Unable to submit rating.");
     } finally {
       setIsSubmittingRating(false);
     }
