@@ -7,7 +7,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 from .models import Rating
-
+from django.middleware.csrf import get_token
 
 def health(_request):
     return JsonResponse({'status': 'ok', 'service': 'portfolio-api'})
@@ -33,11 +33,15 @@ def _is_rate_limited(request, bucket, limit, window_seconds):
     return False
 
 
+
+
 @ensure_csrf_cookie
 @require_GET
 def csrf(request):
-    return JsonResponse({'ok': True})
-
+    return JsonResponse({
+        "ok": True,
+        "csrfToken": get_token(request),
+    })
 
 def _rating_summary():
     aggregate = Rating.objects.aggregate(avg=Avg('value'), count=Count('id'))
